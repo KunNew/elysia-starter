@@ -1,6 +1,7 @@
 import { Context, Elysia } from "elysia";
 import User from "../models/User";
 import { mkdir } from 'node:fs/promises';
+import { ConflictError } from "../plugins/error";
 
 
 export const me = async (
@@ -99,13 +100,14 @@ export const createUser = async ({ body }: { body: User.Schema & { profilePictur
       message: "User created successfully",
       data: newUser,
     };
-  } catch (error: any) {
-    console.error("Error creating user:", error);
-    return {
-      success: false,
-      message: error.message || "Failed to create user",
-      status: 500,
-    };
+  } catch (e: any) {
+    console.error("Error creating user:", e);
+    // Check for MongoDB duplicate key error
+    if (e.name === 'MongoServerError' && e.code === 11000) {
+      throw new ConflictError('User already exists.');
+    }
+    // For other errors
+    throw new Error(e.message || "Failed to create user");
   }
 };
 
@@ -134,11 +136,15 @@ export const updateUser = async (context: Context) => {
       user: updatedUser,
     };
   } catch (error: any) {
-    context.set.status = 500;
-    return {
-      message: error.message || "Failed to update user",
-      status: 500,
-    };
+    console.error("Error updating user:", error);
+    
+    // Check for MongoDB duplicate key error
+    if (error.name === 'MongoServerError' && error.code === 11000) {
+      throw new ConflictError('User with this email already exists.');
+    }
+    
+    // For other errors
+    throw new Error(error.message || "Failed to update user");
   }
 };
 
